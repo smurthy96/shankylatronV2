@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchaudio import transforms as T
-from translatotron.translatron2 import Translatotron2
+from translatotron.transformatron2 import Translatotron2
 from translatotron import SpeechToSpeechDatasetPhonemePreProcessed
 from torch.cuda.amp import autocast, GradScaler
 from torch.profiler import profile, ProfilerActivity, tensorboard_trace_handler
@@ -13,9 +13,9 @@ import torchvision.transforms as transforms
 
 
 # Hyperparameters
-batch_size = 1
+batch_size = 32
 num_epochs = 100
-learning_rate = .002
+learning_rate = .0002
 
 if __name__ == "__main__":
     device = torch.device("cuda")
@@ -36,7 +36,6 @@ if __name__ == "__main__":
         encoder_hidden_dim=512,
         encoder_layers=10,
         phoneme_dim=126657,
-        num_heads=8,
         output_dim=80,
         writer=writer
     ).to(device)
@@ -62,7 +61,7 @@ if __name__ == "__main__":
         concat_prob=0.3
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=1, pin_memory=True, drop_last=True)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=15, pin_memory=True, drop_last=True)
 
     mel_converter = T.MelSpectrogram(sample_rate=16000, n_fft=1024, hop_length=256, n_mels=80).to(device)
 
@@ -229,7 +228,7 @@ if __name__ == "__main__":
                 torch.save(model.state_dict(),
                            f'models/models_premature/translatotron2_model_{epoch}_{batch_idx + 1}.pth')
 
-            if (batch_idx + 1) % 10 == 0:
+            if (batch_idx + 1) % 100 == 0:
                 # Log waveform to TensorBoard (First sample of the batch)
                 writer.add_audio(f'output_waveform/epoch_{epoch}_batch_{batch_idx}',
                                  waveform[0].detach().cpu(),
@@ -263,7 +262,7 @@ if __name__ == "__main__":
                 writer.add_text(f'target_text_flat/epoch_{epoch}_batch_{batch_idx}',
                                 f"Target Indices: {target_text_flat}",
                                 global_step=batch_idx)
-            if (batch_idx + 1) % 10 == 0:
+            if (batch_idx + 1) % 1000 == 0:
                 try:
                     # print("logging gradients")
                     # log_gradients_to_tensorboard(model, writer, epoch, batch_idx)

@@ -43,7 +43,7 @@ class SpeechEncoder(nn.Module):
 
 
 class LinguisticDecoder(nn.Module):
-    def __init__(self, encoder_hidden_dim=512, phoneme_dim=256, num_layers=4, dropout=0.1, reduction_factor=123):
+    def __init__(self, encoder_hidden_dim=512, phoneme_dim=126657, num_layers=4, dropout=0.1, reduction_factor=123):
         super().__init__()
         self.linguistic_decoder = nn.LSTM(
             input_size=encoder_hidden_dim,
@@ -83,7 +83,7 @@ class LinguisticDecoderEmbeddings(nn.Module):
 
 
 class AcousticSynthesizer(nn.Module):
-    def __init__(self, attn_hidden_dim=1024, phoneme_dim=128193, embedding_dim=512, hidden_dim=80, num_layers=4):
+    def __init__(self, attn_hidden_dim=1536, phoneme_dim=126657, embedding_dim=512, hidden_dim=80, num_layers=4):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
@@ -93,7 +93,7 @@ class AcousticSynthesizer(nn.Module):
 
         # Define LSTM for synthesizing mel spectrogram
         self.synthesizer_lstm = nn.LSTM(
-            input_size=attn_hidden_dim + embedding_dim,  # Attention + Phoneme Embedding
+            input_size=attn_hidden_dim + embedding_dim,  # Updated input size
             hidden_size=self.hidden_dim,
             num_layers=self.num_layers,
             batch_first=True
@@ -107,16 +107,11 @@ class AcousticSynthesizer(nn.Module):
         )
 
     def forward(self, attn_output, phoneme_indices):
-        """
-        Args:
-            attn_output: Tensor of shape (batch_size, time_steps, attn_hidden_dim)
-            phoneme_indices: Tensor of shape (batch_size, time_steps)
+        # Convert probabilities to indices
+        phoneme_indices = phoneme_indices.argmax(dim=-1)  # Shape: (batch_size, time_steps)
 
-        Returns:
-            mel_output: Tensor of shape (batch_size, time_steps, hidden_dim)
-        """
         # Embed the phoneme indices
-        phoneme_embeddings = self.phoneme_embedding(phoneme_indices)  # (batch_size, time_steps, embedding_dim)
+        phoneme_embeddings = self.phoneme_embedding(phoneme_indices.long())  # (batch_size, time_steps, embedding_dim)
 
         # Ensure dimensions match for concatenation
         synth_input = torch.cat([attn_output, phoneme_embeddings], dim=-1)  # (batch_size, time_steps, attn_hidden_dim + embedding_dim)
@@ -127,6 +122,8 @@ class AcousticSynthesizer(nn.Module):
         # Project to final mel spectrogram
         mel_output = self.synthesizer_projector(mel_output)
         return mel_output
+
+
 
 
 class SpeakerEncoder(nn.Module):
@@ -347,8 +344,9 @@ class Translatotron2(nn.Module):
         # 5. Linguistic Decoder (produces phoneme predictions)
         phoneme_output = self.linguistic_decoder(speech_encoder_output)
 
+
         # 6. Acoustic Synthesizer (generates intermediate mel-spectrograms)
-        mel_output = self.acoustic_synthesizer(attn_output, phoneme_output.argmax(dim=-1))
+        mel_output = self.acoustic_synthesizer(attn_output, phoneme_output)
 
         # 7. Neural Vocoder (final waveform synthesis)
         waveform = self.NeuralNemoVocoder(mel_output)
@@ -359,7 +357,7 @@ class Translatotron2(nn.Module):
         waveform = waveform / max_val
 
         try:
-            if (batch_idx + 1) % 10 == 0:
+            if (batch_idx + 1) % 1000 == 0:
                 self.tfwriter.add_histogram('Speech Encoder', speech_encoder_output, global_step=batch_idx)
                 self.tfwriter.add_histogram('Intermediate/Speaker_Embedding', speaker_embedding, global_step=batch_idx)
                 self.tfwriter.add_histogram('Intermediate/Attention_Output', attn_output, global_step=batch_idx)
